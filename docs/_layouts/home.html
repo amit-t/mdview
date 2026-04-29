@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  {% include head.html %}
+</head>
+<body>
+  {% include theme-switcher.html %}
+  {% include site-nav.html %}
+
+  <header class="container hero">
+    <div>
+      <span class="hero-eyebrow">{{ page.hero_eyebrow | default: "zsh, one file, no deps" }}</span>
+      <h1>{{ page.hero_title | default: site.title }}</h1>
+      <p class="hero-desc">
+        {{ page.hero_desc | default: site.description }}
+      </p>
+      <div class="hero-actions">
+        <a class="neo-btn neo-btn-primary" href="{{ '/USAGE.html' | relative_url }}">Read Usage</a>
+        <a class="neo-btn neo-btn-accent" href="https://github.com/amit-t/mdview" target="_blank" rel="noreferrer">View on GitHub</a>
+        <a class="neo-btn" href="{{ '/DEVELOPMENT.html' | relative_url }}">Development</a>
+      </div>
+
+      <div class="hero-stats">
+        <div class="stat-card">
+          <span class="stat-value">1</span>
+          <span class="stat-label">FILE BINARY</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-value">0</span>
+          <span class="stat-label">RUNTIME DEPS</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-value">2</span>
+          <span class="stat-label">macOS / LINUX</span>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <hr class="divider container">
+
+  <main class="container section">
+    <article class="markdown-body">
+      {{ content }}
+    </article>
+  </main>
+
+  {% include footer.html %}
+
+  <script src="{{ '/assets/js/site.js' | relative_url }}"></script>
+</body>
+</html>

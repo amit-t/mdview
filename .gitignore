@@ -6,3 +6,10 @@
 /.claude/
 /.idea/
 *.html.tmp
+
+# Jekyll build artifacts
+docs/_site/
+docs/.jekyll-cache/
+docs/.bundle/
+docs/vendor/
+docs/Gemfile.lock

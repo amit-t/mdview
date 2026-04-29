@@ -1,12 +1,11 @@
 ---
 title: Usage
+eyebrow: Reference
 description: Every flag, edge case, and workflow for mdview.
 ---
 
-# mdview — usage
-
 A deeper tour of the flags, edge cases, and workflows. The
-[home page](index.html) has the quick start; this file has the rest.
+[home page]({{ '/' | relative_url }}) has the quick start; this file has the rest.
 
 ## Modes
 

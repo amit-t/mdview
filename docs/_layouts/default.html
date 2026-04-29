@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  {% include head.html %}
+</head>
+<body>
+  {% include theme-switcher.html %}
+  {% include site-nav.html %}
+  {% include breadcrumbs.html %}
+
+  <main class="container section">
+    {% if page.title and page.url != '/' %}
+    <header class="doc-hero">
+      {% if page.eyebrow %}<span class="doc-hero-eyebrow">{{ page.eyebrow }}</span>{% endif %}
+      <h1>{{ page.title }}</h1>
+      {% if page.description %}<p class="doc-hero-desc">{{ page.description }}</p>{% endif %}
+    </header>
+    {% endif %}
+    <article class="markdown-body">
+      {{ content }}
+    </article>
+  </main>
+
+  {% include footer.html %}
+
+  <script src="{{ '/assets/js/site.js' | relative_url }}"></script>
+</body>
+</html>

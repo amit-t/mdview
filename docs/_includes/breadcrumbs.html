@@ -1,0 +1,7 @@
+{% assign current_title = page.title | default: page.name | default: "Page" %}
+<nav class="container breadcrumbs" aria-label="Breadcrumbs">
+  <ol>
+    <li><a href="{{ '/' | relative_url }}">Home</a></li>
+    <li aria-current="page">{{ current_title }}</li>
+  </ol>
+</nav>
