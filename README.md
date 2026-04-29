@@ -1,5 +1,9 @@
 # mdview
 
+[![Docs](https://img.shields.io/badge/docs-amit--t.github.io%2Fmdview-1f6feb?logo=github)](https://amit-t.github.io/mdview/)
+[![CI](https://github.com/amit-t/mdview/actions/workflows/ci.yml/badge.svg)](https://github.com/amit-t/mdview/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+
 > Preview any markdown file in your browser (or terminal) with one command.
 
 `mdview` is a single-file [zsh](https://www.zsh.org/) script that turns a

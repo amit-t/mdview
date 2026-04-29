@@ -1,0 +1,41 @@
+title: mdview
+description: Preview any markdown file in your browser (or terminal) with one command.
+theme: jekyll-theme-cayman
+show_downloads: false
+github:
+  owner_name: amit-t
+  owner_url: https://github.com/amit-t
+  repository_name: mdview
+  repository_url: https://github.com/amit-t/mdview
+  zip_url: https://github.com/amit-t/mdview/zipball/main
+  tar_url: https://github.com/amit-t/mdview/tarball/main
+
+defaults:
+  - scope:
+      path: ""
+      type: pages
+    values:
+      layout: default
+
+plugins:
+  - jekyll-relative-links
+  - jekyll-seo-tag
+
+relative_links:
+  enabled: true
+  collections: false
+
+include:
+  - CHANGELOG.md
+  - CONTRIBUTING.md
+
+exclude:
+  - Gemfile
+  - Gemfile.lock
+  - vendor
+  - node_modules
+
+kramdown:
+  input: GFM
+  syntax_highlighter: rouge
+  hard_wrap: false

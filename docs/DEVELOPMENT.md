@@ -1,3 +1,8 @@
+---
+title: Development
+description: Repo layout, dev loop, and release checklist for mdview.
+---
+
 # Development
 
 Notes for hacking on mdview itself.

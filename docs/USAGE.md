@@ -1,7 +1,12 @@
+---
+title: Usage
+description: Every flag, edge case, and workflow for mdview.
+---
+
 # mdview — usage
 
-A deeper tour of the flags, edge cases, and workflows. The README has the
-quick start; this file has the rest.
+A deeper tour of the flags, edge cases, and workflows. The
+[home page](index.html) has the quick start; this file has the rest.
 
 ## Modes
 
