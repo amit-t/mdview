@@ -1,0 +1,18 @@
+#compdef mdview mdv
+# zsh completion for mdview.
+
+local -a opts
+opts=(
+  '(-h --help)'{-h,--help}'[show help]'
+  '(-V --version)'{-V,--version}'[show version]'
+  '(-b --browser -t --terminal -p --print)'{-b,--browser}'[render to HTML and open in browser (default)]'
+  '(-b --browser -t --terminal -p --print)'{-t,--terminal}'[render in terminal]'
+  '(-b --browser -t --terminal -p --print)'{-p,--print}'[print HTML to stdout]'
+  '(-n --no-open)'{-n,--no-open}'[do not launch browser after writing file]'
+  '(-o --output)'{-o,--output}'[output HTML path]:path:_files'
+  '--app[browser to open]:browser:(Safari "Google Chrome" Firefox Brave Arc)'
+  '--title[override <title>]:title:'
+  '*:markdown file:_files -g "*.md *.markdown *.mdown *.mkd"'
+)
+
+_arguments -s -S $opts

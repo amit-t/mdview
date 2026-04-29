@@ -1,0 +1,39 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: lint + test
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install zsh (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y zsh
+
+      - name: Show zsh version
+        run: zsh --version
+
+      - name: Lint (zsh -n)
+        run: make lint
+
+      - name: Run tests
+        run: make test
+
+      - name: Smoke install
+        run: |
+          make install PREFIX="${RUNNER_TEMP}/install-prefix"
+          "${RUNNER_TEMP}/install-prefix/bin/mdview" --version
+          "${RUNNER_TEMP}/install-prefix/bin/mdv" --version
+          make uninstall PREFIX="${RUNNER_TEMP}/install-prefix"

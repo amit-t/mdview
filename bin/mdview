@@ -1,0 +1,267 @@
+#!/usr/bin/env zsh
+# mdview — preview a markdown file in the browser (or terminal).
+#
+# Usage:
+#   mdview FILE [-b|-t|-p] [-o PATH] [-n] [--app APP] [--title TITLE]
+#   mdview - [opts]              # read markdown from stdin
+#   mdview -h | --help
+#   mdview -V | --version
+#
+# Modes:
+#   -b, --browser       Render to HTML, open in default browser (default)
+#   -t, --terminal      Render in terminal (glow > mdcat > bat > pager)
+#   -p, --print         Print rendered HTML to stdout (no open, no file)
+#
+# Options:
+#   -o, --output PATH   Save HTML to PATH instead of an auto temp file
+#   -n, --no-open       Write HTML to disk but do not launch the browser
+#       --app APP       Open in a specific browser (e.g. "Google Chrome",
+#                       "Safari", "Firefox"). Default: macOS `open` chooses.
+#       --title TITLE   Override <title>. Default: file basename.
+#   -h, --help          Show this help.
+#   -V, --version       Show version.
+#
+# Renderer chain for HTML output:
+#   1. pandoc (if installed) — fully offline, GitHub style.
+#   2. Fallback: client-side render with marked.js + github-markdown-css +
+#      highlight.js loaded from a CDN. The raw markdown is embedded in a
+#      hidden <textarea> (HTML-escaped) so it survives any content safely.
+
+emulate -L zsh
+set -euo pipefail
+
+readonly MDVIEW_VERSION="1.0.0"
+
+# Capture script path before any function runs — inside zsh functions, $0
+# refers to the function name (FUNCTION_ARGZERO is on by default).
+script_path=${0:A}
+prog=${script_path:t}
+
+usage() {
+    awk '
+        NR == 1 && /^#!/ { next }
+        /^[^#]/ { exit }
+        { sub(/^# ?/, ""); print }
+    ' "$script_path"
+}
+
+die() { print -ru2 -- "${prog}: $1"; exit "${2:-1}"; }
+
+# ---------- arg parsing -----------------------------------------------------
+mode="browser"
+file=""
+output=""
+no_open=0
+app=""
+title=""
+
+while (( $# > 0 )); do
+    case "$1" in
+        -h|--help)      usage; exit 0 ;;
+        -V|--version)   print -r -- "mdview ${MDVIEW_VERSION}"; exit 0 ;;
+        -b|--browser)   mode="browser"; shift ;;
+        -t|--terminal)  mode="terminal"; shift ;;
+        -p|--print)     mode="print"; shift ;;
+        -n|--no-open)   no_open=1; shift ;;
+        -o|--output)    (( $# >= 2 )) || die "--output needs a path"
+                        output="$2"; shift 2 ;;
+        --app)          (( $# >= 2 )) || die "--app needs a name"
+                        app="$2"; shift 2 ;;
+        --title)        (( $# >= 2 )) || die "--title needs a value"
+                        title="$2"; shift 2 ;;
+        --)             shift; break ;;
+        -)              # bare dash → positional, means stdin
+                        [[ -z "$file" ]] || die "extra arg: -" 2
+                        file="-"; shift ;;
+        -*)             die "unknown flag: $1 (try --help)" 2 ;;
+        *)              [[ -z "$file" ]] || die "extra arg: $1" 2
+                        file="$1"; shift ;;
+    esac
+done
+
+[[ -n "$file" ]] || { usage >&2; exit 2 }
+
+# ---------- read source -----------------------------------------------------
+if [[ "$file" = "-" ]]; then
+    md_content=$(cat)
+    src_label="stdin"
+else
+    [[ -f "$file" ]] || die "no such file: $file"
+    md_content=$(cat -- "$file")
+    src_label=${file:t}
+fi
+[[ -n "$title" ]] || title="$src_label"
+
+# ---------- helpers ---------------------------------------------------------
+html_escape() {
+    # Escape &, <, >, ", ' for safe insertion into HTML attributes & text.
+    print -rn -- "$1" \
+        | sed -e 's/&/\&amp;/g' \
+              -e 's/</\&lt;/g' \
+              -e 's/>/\&gt;/g' \
+              -e 's/"/\&quot;/g' \
+              -e "s/'/\&#39;/g"
+}
+
+# Escape only & and < for embedding inside <textarea>.
+# textarea is an "escapable raw text" element — only </textarea> closes it,
+# so escaping < eliminates that risk and & ensures correct &lt; round-trip.
+textarea_escape() {
+    print -rn -- "$1" \
+        | sed -e 's/&/\&amp;/g' \
+              -e 's/</\&lt;/g'
+}
+
+# ---------- terminal mode ---------------------------------------------------
+if [[ "$mode" = "terminal" ]]; then
+    if (( $+commands[glow] )); then
+        if [[ "$file" = "-" ]]; then print -rn -- "$md_content" | glow -
+        else glow -- "$file"; fi
+    elif (( $+commands[mdcat] )); then
+        if [[ "$file" = "-" ]]; then print -rn -- "$md_content" | mdcat
+        else mdcat -- "$file"; fi
+    elif (( $+commands[bat] )); then
+        if [[ "$file" = "-" ]]; then
+            print -rn -- "$md_content" | bat -l md --paging=never
+        else
+            bat -l md --paging=never -- "$file"
+        fi
+    else
+        # Plain pager fallback — preserves content even with no renderer.
+        local pager="${PAGER:-less -R}"
+        print -r -- "$md_content" | eval "$pager"
+    fi
+    exit 0
+fi
+
+# ---------- HTML render -----------------------------------------------------
+title_html=$(html_escape "$title")
+
+render_with_pandoc() {
+    local body
+    if [[ "$file" = "-" ]]; then
+        body=$(print -rn -- "$md_content" | pandoc -f gfm -t html)
+    else
+        body=$(pandoc -f gfm -t html -- "$file")
+    fi
+    cat <<HTML
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>${title_html}</title>
+<link rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/github-markdown-css@5.5.1/github-markdown.min.css">
+<style>
+  body { box-sizing: border-box; min-width: 200px; max-width: 920px;
+         margin: 0 auto; padding: 32px 48px; }
+  @media (prefers-color-scheme: dark) {
+    body { background: #0d1117; }
+  }
+</style>
+</head>
+<body class="markdown-body">
+${body}
+</body>
+</html>
+HTML
+}
+
+render_with_marked() {
+    local md_escaped
+    md_escaped=$(textarea_escape "$md_content")
+    cat <<HTML
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>${title_html}</title>
+<link rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/github-markdown-css@5.5.1/github-markdown.min.css">
+<link rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/styles/github.min.css">
+<style>
+  body { box-sizing: border-box; min-width: 200px; max-width: 920px;
+         margin: 0 auto; padding: 32px 48px; }
+  @media (prefers-color-scheme: dark) {
+    body { background: #0d1117; }
+  }
+  pre code.hljs { display:block; overflow:auto; padding:1em; border-radius:6px; }
+  #md-source { display:none; }
+  #fallback { white-space: pre-wrap; font-family: ui-monospace, monospace;
+              padding: 16px; background:#f6f8fa; border-radius:6px; }
+</style>
+</head>
+<body>
+<article id="content" class="markdown-body"><p>Loading preview…</p></article>
+<noscript>
+  <p><strong>JavaScript is disabled.</strong> Showing raw markdown:</p>
+  <pre id="fallback">${md_escaped}</pre>
+</noscript>
+<textarea id="md-source" readonly aria-hidden="true">${md_escaped}</textarea>
+<script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/highlight.min.js"></script>
+<script>
+  (function () {
+    var raw = document.getElementById('md-source').value;
+    var content = document.getElementById('content');
+    if (!window.marked) {
+      var pre = document.createElement('pre');
+      pre.textContent = raw;
+      content.innerHTML = '';
+      content.appendChild(pre);
+      return;
+    }
+    marked.setOptions({
+      gfm: true,
+      breaks: false,
+      headerIds: true,
+      highlight: function (code, lang) {
+        if (window.hljs) {
+          try {
+            return lang && hljs.getLanguage(lang)
+              ? hljs.highlight(code, { language: lang }).value
+              : hljs.highlightAuto(code).value;
+          } catch (e) { /* fall through */ }
+        }
+        return code;
+      }
+    });
+    content.innerHTML = marked.parse(raw);
+  })();
+</script>
+</body>
+</html>
+HTML
+}
+
+if (( $+commands[pandoc] )); then
+    html=$(render_with_pandoc)
+else
+    html=$(render_with_marked)
+fi
+
+# ---------- print mode ------------------------------------------------------
+if [[ "$mode" = "print" ]]; then
+    print -r -- "$html"
+    exit 0
+fi
+
+# ---------- write file ------------------------------------------------------
+if [[ -z "$output" ]]; then
+    tmpdir=$(mktemp -d -t mdview)
+    safe_label=$(print -rn -- "$src_label" | tr -c 'A-Za-z0-9._-' '_')
+    output="$tmpdir/${safe_label%.md}.html"
+fi
+
+print -r -- "$html" > "$output"
+print -r -- "$output"
+
+# ---------- launch browser --------------------------------------------------
+if (( no_open == 0 )); then
+    if [[ -n "$app" ]]; then
+        open -a "$app" "$output"
+    else
+        open "$output"
+    fi
+fi
