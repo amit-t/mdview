@@ -4,16 +4,21 @@
 [![CI](https://github.com/amit-t/mdview/actions/workflows/ci.yml/badge.svg)](https://github.com/amit-t/mdview/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
-> Preview any markdown file in your browser (or terminal) with one command.
+> Preview any markdown (or MDX) file in your browser (or terminal) with one command.
 
 `mdview` is a single-file [zsh](https://www.zsh.org/) script that turns a
 markdown file (or stdin) into a styled HTML preview and opens it in your
-default browser. Optional terminal-mode and "print HTML to stdout" flags
-make it equally happy in editors, scripts, and pipelines.
+default browser. `.mdx` files are detected automatically and rendered with
+JSX, components, and `{ expressions }` intact. Optional terminal-mode and
+"print HTML to stdout" flags make it equally happy in editors, scripts, and
+pipelines.
 
 - **One file, one PATH entry.** No npm, no Python, no virtualenv.
 - **Pandoc when present, CDN fallback otherwise.** Works on a fresh Mac out
   of the box. Pandoc support kicks in automatically if installed.
+- **MDX, seamlessly.** `mdview component.mdx` just works — Markdown + JSX
+  rendered client-side via `@mdx-js/mdx` + React, with a graceful
+  markdown-only fallback when components can't load.
 - **Safe by construction.** Markdown is embedded into a `<textarea>` and
   HTML-escaped, so adversarial content (literal `</script>`, raw HTML, etc.)
   cannot break out of the page.
@@ -27,6 +32,8 @@ mdview notes.md -t                   # terminal mode (glow → mdcat → bat →
 mdview notes.md -p > out.html        # print HTML to stdout
 mdview notes.md -o /tmp/x.html -n    # write to a path, do not open
 cat notes.md | mdview -              # read markdown from stdin
+mdview component.mdx                 # MDX auto-detected → JSX rendered
+cat post.mdx | mdview - --mdx        # force MDX for stdin / non-.mdx files
 mdv  notes.md                        # short alias
 ```
 
@@ -156,7 +163,7 @@ losing zsh tab-completion (which only attaches to commands on `PATH`).
 ## Usage
 
 ```text
-mdview FILE [-b|-t|-p] [-o PATH] [-n] [--app APP] [--title TITLE]
+mdview FILE [-b|-t|-p] [-o PATH] [-n] [--mdx|--md] [--app APP] [--title T]
 mdview - [opts]              # read markdown from stdin
 mdview -h | --help
 mdview -V | --version
@@ -175,6 +182,8 @@ chain details.
 | `-p`, `--print`     | Print rendered HTML to stdout (no file, no open).            |
 | `-o`, `--output P`  | Save HTML to path `P` instead of an auto temp file.          |
 | `-n`, `--no-open`   | Write the HTML file but skip launching the browser.          |
+| `--mdx`             | Treat input as MDX (auto for `*.mdx`; forces it for stdin/`.md`). |
+| `--md`              | Treat input as plain Markdown (overrides `.mdx` detection).  |
 | `--app NAME`        | Open in a specific browser (`"Google Chrome"`, `"Safari"`).  |
 | `--title TITLE`     | Override `<title>`. Default: file basename.                  |
 | `-h`, `--help`      | Show help.                                                   |
@@ -199,6 +208,26 @@ The `<textarea>` embedding is deliberate: the only sequence that closes a
 textarea is `</textarea>`, so escaping `<` (and `&`) on the way in
 neutralises any `</script>` or other tag-soup in the input. The test suite
 has an explicit case proving this.
+
+### MDX files
+
+`.mdx` inputs (or any input with `--mdx`) skip the markdown chain entirely
+and render client-side with [`@mdx-js/mdx`](https://mdxjs.com/) + React,
+loaded as ESM from [esm.sh](https://esm.sh). This means JSX elements,
+inline components (`export const Box = …`), and `{ expressions }` evaluate
+in the browser exactly as MDX intends. The raw source is embedded in the
+same HTML-escaped `<textarea>`, so the security property above is preserved.
+
+If the full MDX render fails — most often because the file `import`s local
+components that a browser can't resolve from a `file://` temp page — mdview
+degrades to a **markdown-only preview** (ESM statement lines stripped,
+remaining prose rendered with `marked.js`) and shows a notice, rather than a
+blank page. Terminal mode (`-t`) similarly strips `import`/`export` lines and
+renders the prose with `glow`/`mdcat`/`bat`.
+
+> MDX needs network on first load to fetch the React + `@mdx-js` ESM bundles
+> (then the browser caches them). Unlike the markdown path, there is no
+> offline `pandoc` route for MDX — rendering JSX requires a JS runtime.
 
 ## Optional dependencies
 

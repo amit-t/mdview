@@ -14,7 +14,9 @@ and docs.
 - **Single-file user binary.** `bin/mdview` must remain self-contained. Don't
   split helpers into other files; the install path is "drop one file on PATH".
 - **No new runtime dependencies.** pandoc, glow, mdcat, bat are all optional —
-  the CDN fallback for HTML rendering is the floor.
+  the CDN fallback for HTML rendering is the floor. MDX rendering is part of
+  that floor: it runs entirely client-side via `@mdx-js/mdx` + React loaded as
+  ESM from a CDN (esm.sh), so it adds no local install requirement.
 - **Tests live in `tests/`.** Every behavioural change needs a test there.
   `make test` must pass before commit.
 - **Tests stub `open`** so they never spawn a real browser. Preserve that.

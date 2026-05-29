@@ -4,6 +4,29 @@ All notable changes to **mdview** documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **MDX support.** `.mdx` files are auto-detected and rendered as MDX
+  (Markdown + JSX): JSX elements, inline components, and `{ expressions }`
+  evaluate client-side via `@mdx-js/mdx` + React (ESM from esm.sh, wired with
+  an import map). The raw source is embedded in the same HTML-escaped
+  `<textarea>`, preserving the existing escaping security property.
+- `--mdx` flag to force MDX for stdin or `.md` input; `--md` / `--markdown`
+  to force plain Markdown and override `.mdx` detection.
+- Graceful degradation: if the full MDX render fails (e.g. unresolved local
+  imports), mdview strips `import`/`export` lines and renders the remaining
+  prose with `marked.js`, showing a notice instead of a blank page.
+- Terminal mode (`-t`) strips `import`/`export` lines from MDX before handing
+  the prose to `glow`/`mdcat`/`bat`/`$PAGER`.
+
+### Fixed
+- Auto temp filename now strips the `.mdx` extension (was producing
+  `name.mdx.html`; now `name.html`, matching `.md` behaviour).
+
+### Changed
+- Zsh completion offers `--mdx` / `--md` and includes `*.mdx` in the file glob.
+
 ## [1.0.0] — 2026-04-29
 
 ### Added

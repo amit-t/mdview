@@ -9,10 +9,13 @@ opts=(
   '(-b --browser -t --terminal -p --print)'{-t,--terminal}'[render in terminal]'
   '(-b --browser -t --terminal -p --print)'{-p,--print}'[print HTML to stdout]'
   '(-n --no-open)'{-n,--no-open}'[do not launch browser after writing file]'
+  '(--mdx --md --markdown)--mdx[treat input as MDX (Markdown + JSX)]'
+  '(--mdx --md --markdown)--md[treat input as plain Markdown]'
+  '(--mdx --md --markdown)--markdown[treat input as plain Markdown]'
   '(-o --output)'{-o,--output}'[output HTML path]:path:_files'
   '--app[browser to open]:browser:(Safari "Google Chrome" Firefox Brave Arc)'
   '--title[override <title>]:title:'
-  '*:markdown file:_files -g "*.md *.markdown *.mdown *.mkd"'
+  '*:markdown file:_files -g "*.md *.mdx *.markdown *.mdown *.mkd"'
 )
 
 _arguments -s -S $opts

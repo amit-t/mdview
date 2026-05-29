@@ -1,8 +1,8 @@
 #!/usr/bin/env zsh
-# mdview — preview a markdown file in the browser (or terminal).
+# mdview — preview a markdown (or MDX) file in the browser (or terminal).
 #
 # Usage:
-#   mdview FILE [-b|-t|-p] [-o PATH] [-n] [--app APP] [--title TITLE]
+#   mdview FILE [-b|-t|-p] [-o PATH] [-n] [--mdx|--md] [--app APP] [--title T]
 #   mdview - [opts]              # read markdown from stdin
 #   mdview -h | --help
 #   mdview -V | --version
@@ -15,6 +15,9 @@
 # Options:
 #   -o, --output PATH   Save HTML to PATH instead of an auto temp file
 #   -n, --no-open       Write HTML to disk but do not launch the browser
+#       --mdx           Treat input as MDX (Markdown + JSX). Auto-detected
+#                       for *.mdx files; use this to force it for stdin/.md.
+#       --md            Treat input as plain Markdown (overrides .mdx).
 #       --app APP       Open in a specific browser (e.g. "Google Chrome",
 #                       "Safari", "Firefox"). Default: macOS `open` chooses.
 #       --title TITLE   Override <title>. Default: file basename.
@@ -26,6 +29,12 @@
 #   2. Fallback: client-side render with marked.js + github-markdown-css +
 #      highlight.js loaded from a CDN. The raw markdown is embedded in a
 #      hidden <textarea> (HTML-escaped) so it survives any content safely.
+#
+# MDX files (*.mdx, or any input with --mdx) bypass the chain above and are
+# rendered client-side with @mdx-js/mdx + React (ESM from a CDN), so JSX,
+# components and { expressions } evaluate. If that fails (e.g. unresolved
+# local imports), it degrades to a markdown-only preview. The same
+# HTML-escaped <textarea> embedding is used, so the security property holds.
 
 emulate -L zsh
 set -euo pipefail
@@ -54,6 +63,7 @@ output=""
 no_open=0
 app=""
 title=""
+force_fmt=""   # "", "mdx", or "md"
 
 while (( $# > 0 )); do
     case "$1" in
@@ -63,6 +73,8 @@ while (( $# > 0 )); do
         -t|--terminal)  mode="terminal"; shift ;;
         -p|--print)     mode="print"; shift ;;
         -n|--no-open)   no_open=1; shift ;;
+        --mdx)          force_fmt="mdx"; shift ;;
+        --md|--markdown) force_fmt="md"; shift ;;
         -o|--output)    (( $# >= 2 )) || die "--output needs a path"
                         output="$2"; shift 2 ;;
         --app)          (( $# >= 2 )) || die "--app needs a name"
@@ -92,6 +104,15 @@ else
 fi
 [[ -n "$title" ]] || title="$src_label"
 
+# ---------- format selection (markdown vs MDX) ------------------------------
+# .mdx files auto-select MDX; --mdx / --md override (stdin defaults to md).
+is_mdx=0
+case "$force_fmt" in
+    mdx) is_mdx=1 ;;
+    md)  is_mdx=0 ;;
+    *)   [[ "$file" != "-" && "${file:l}" == *.mdx ]] && is_mdx=1 ;;
+esac
+
 # ---------- helpers ---------------------------------------------------------
 html_escape() {
     # Escape &, <, >, ", ' for safe insertion into HTML attributes & text.
@@ -114,22 +135,32 @@ textarea_escape() {
 
 # ---------- terminal mode ---------------------------------------------------
 if [[ "$mode" = "terminal" ]]; then
+    # Terminal renderers only understand Markdown. For MDX, drop the ESM
+    # import/export statement lines so the prose renders cleanly, then always
+    # feed the cleaned text via stdin (JSX tags are left as-is, shown literal).
+    t_file="$file"
+    t_content="$md_content"
+    if (( is_mdx )); then
+        t_content=$(print -r -- "$md_content" \
+            | sed -E '/^[[:space:]]*(import|export)[[:space:]].*$/d')
+        t_file="-"
+    fi
     if (( $+commands[glow] )); then
-        if [[ "$file" = "-" ]]; then print -rn -- "$md_content" | glow -
-        else glow -- "$file"; fi
+        if [[ "$t_file" = "-" ]]; then print -rn -- "$t_content" | glow -
+        else glow -- "$t_file"; fi
     elif (( $+commands[mdcat] )); then
-        if [[ "$file" = "-" ]]; then print -rn -- "$md_content" | mdcat
-        else mdcat -- "$file"; fi
+        if [[ "$t_file" = "-" ]]; then print -rn -- "$t_content" | mdcat
+        else mdcat -- "$t_file"; fi
     elif (( $+commands[bat] )); then
-        if [[ "$file" = "-" ]]; then
-            print -rn -- "$md_content" | bat -l md --paging=never
+        if [[ "$t_file" = "-" ]]; then
+            print -rn -- "$t_content" | bat -l md --paging=never
         else
-            bat -l md --paging=never -- "$file"
+            bat -l md --paging=never -- "$t_file"
         fi
     else
         # Plain pager fallback — preserves content even with no renderer.
         local pager="${PAGER:-less -R}"
-        print -r -- "$md_content" | eval "$pager"
+        print -r -- "$t_content" | eval "$pager"
     fi
     exit 0
 fi
@@ -235,7 +266,105 @@ render_with_marked() {
 HTML
 }
 
-if (( $+commands[pandoc] )); then
+render_mdx() {
+    local md_escaped
+    md_escaped=$(textarea_escape "$md_content")
+    cat <<HTML
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>${title_html}</title>
+<link rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/github-markdown-css@5.5.1/github-markdown.min.css">
+<link rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/styles/github.min.css">
+<style>
+  body { box-sizing: border-box; min-width: 200px; max-width: 920px;
+         margin: 0 auto; padding: 32px 48px; }
+  @media (prefers-color-scheme: dark) {
+    body { background: #0d1117; }
+  }
+  pre code.hljs { display:block; overflow:auto; padding:1em; border-radius:6px; }
+  #md-source { display:none; }
+  #notice { display:none; margin:0 0 16px; padding:10px 14px; border-radius:6px;
+            background:#fff8c5; border:1px solid #d4a72c; color:#3b2300;
+            font:14px/1.5 ui-sans-serif, system-ui, sans-serif; }
+  @media (prefers-color-scheme: dark) {
+    #notice { background:#2d2200; border-color:#9e6a03; color:#f2cc60; }
+  }
+  #content { min-height: 1em; }
+  #fallback { white-space: pre-wrap; font-family: ui-monospace, monospace;
+              padding: 16px; background:#f6f8fa; border-radius:6px; }
+</style>
+<script type="importmap">
+{ "imports": {
+  "react": "https://esm.sh/react@18",
+  "react-dom": "https://esm.sh/react-dom@18",
+  "react-dom/client": "https://esm.sh/react-dom@18/client",
+  "react/jsx-runtime": "https://esm.sh/react@18/jsx-runtime",
+  "@mdx-js/react": "https://esm.sh/@mdx-js/react@3"
+}}
+</script>
+</head>
+<body>
+<div id="notice" class="markdown-body" role="status"></div>
+<article id="content" class="markdown-body"><p>Loading MDX preview…</p></article>
+<noscript>
+  <p><strong>JavaScript is disabled.</strong> Showing raw MDX source:</p>
+  <pre id="fallback">${md_escaped}</pre>
+</noscript>
+<textarea id="md-source" readonly aria-hidden="true">${md_escaped}</textarea>
+<script type="module">
+  import React from 'react';
+  import { createRoot } from 'react-dom/client';
+  import * as runtime from 'react/jsx-runtime';
+  import { evaluate } from 'https://esm.sh/@mdx-js/mdx@3?bundle';
+
+  const raw = document.getElementById('md-source').value;
+  const content = document.getElementById('content');
+  const notice = document.getElementById('notice');
+
+  function showNotice(msg) {
+    notice.textContent = msg;
+    notice.style.display = 'block';
+  }
+
+  async function fallbackMarkdown(reason) {
+    showNotice('Full MDX render failed (' + reason + '). Showing a markdown-only '
+      + 'preview; interactive components are omitted.');
+    try {
+      const mod = await import('https://esm.sh/marked@12');
+      const marked = mod.marked || mod.default;
+      const cleaned = raw.replace(/^[ \t]*(import|export)\b[^\n]*$/gm, '');
+      content.innerHTML = marked.parse(cleaned);
+    } catch (e) {
+      const pre = document.createElement('pre');
+      pre.textContent = raw;
+      content.innerHTML = '';
+      content.appendChild(pre);
+    }
+  }
+
+  (async function () {
+    try {
+      const mod = await evaluate(raw, Object.assign({}, runtime, { baseUrl: location.href }));
+      const MDXContent = mod.default;
+      content.innerHTML = '';
+      createRoot(content).render(React.createElement(MDXContent, {}));
+    } catch (err) {
+      await fallbackMarkdown(err && err.message ? err.message : String(err));
+    }
+  })();
+</script>
+</body>
+</html>
+HTML
+}
+
+if (( is_mdx )); then
+    html=$(render_mdx)
+elif (( $+commands[pandoc] )); then
     html=$(render_with_pandoc)
 else
     html=$(render_with_marked)
@@ -251,7 +380,9 @@ fi
 if [[ -z "$output" ]]; then
     tmpdir=$(mktemp -d -t mdview)
     safe_label=$(print -rn -- "$src_label" | tr -c 'A-Za-z0-9._-' '_')
-    output="$tmpdir/${safe_label%.md}.html"
+    base=${safe_label%.mdx}
+    base=${base%.md}
+    output="$tmpdir/${base}.html"
 fi
 
 print -r -- "$html" > "$output"

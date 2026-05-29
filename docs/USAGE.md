@@ -63,9 +63,27 @@ mdview notes.md --title "April release notes"
 The value is HTML-escaped before being inserted, so `--title 'A & B'` renders
 as `A &amp; B` in the `<title>` element — safe to pass any string.
 
+## Markdown vs MDX
+
+mdview picks a format per invocation:
+
+- **`.mdx` files** are auto-detected and rendered as MDX (Markdown + JSX).
+- **`--mdx`** forces MDX for any input — useful for stdin or a `.md` file
+  that actually contains JSX.
+- **`--md`** (alias `--markdown`) forces plain Markdown, overriding `.mdx`
+  detection.
+
+```bash
+mdview component.mdx                 # auto-detected MDX
+cat post.mdx | mdview - --mdx        # MDX from stdin (no extension to sniff)
+mdview weird.mdx --md                # render it as plain markdown instead
+```
+
+MDX rendering is described under [Renderer chain](#renderer-chain) below.
+
 ## Renderer chain
 
-Two rendering paths, picked at runtime:
+For **Markdown**, two rendering paths, picked at runtime:
 
 1. **`pandoc` (preferred)** — fully offline, GitHub-flavoured Markdown to
    HTML. mdview wraps the output in a styled document using
@@ -78,6 +96,23 @@ Two rendering paths, picked at runtime:
 
 The fallback path requires network on first load (CDN). After that the
 browser caches the JS/CSS like any other page.
+
+For **MDX**, there is one path: the file is rendered client-side with
+[`@mdx-js/mdx`](https://mdxjs.com/) + React, loaded as ESM from
+[esm.sh](https://esm.sh) (an import map maps `react`, `react-dom`, and
+`react/jsx-runtime`). The raw source is embedded in the same HTML-escaped
+`<textarea id="md-source">`, then `evaluate()`d so JSX, inline components and
+`{ expressions }` run in the browser. There is no `pandoc` route for MDX —
+rendering JSX requires a JS runtime, so MDX always needs network on first
+load.
+
+If `evaluate()` throws — typically because the MDX `import`s a local
+component the browser can't fetch from the `file://` temp page — mdview
+catches it and degrades to a **markdown-only preview**: it strips the
+`import`/`export` statement lines and renders the rest with `marked.js`,
+showing a notice instead of a blank page. In terminal mode (`-t`), MDX has
+its `import`/`export` lines stripped before being handed to
+`glow`/`mdcat`/`bat`/`$PAGER`.
 
 ### Why `<textarea>` embedding?
 
